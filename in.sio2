@@ -1,0 +1,82 @@
+# test Vashishta potential for quartz
+
+units		metal
+boundary	p p p
+
+atom_style	atomic
+
+read_data	data.quartz
+
+replicate       4 4 20
+velocity	all create 200.0 277387 mom yes
+displace_atoms	all move 0.05 0.9 0.4 units box
+
+pair_style 	vashishta
+pair_coeff	* *  SiO.1990.vashishta Si O
+
+neighbor	0.3 bin
+neigh_modify	delay 1
+
+fix             1 all npt  temp 300.0 300.0 10.0 aniso 0.0 0.0 10 
+run 1000
+unfix 1
+#undump 1
+
+
+#menghitung tegangan renggangan potensial
+
+compute mype all pe/atom
+compute peratom all stress/atom NULL
+compute mytemp all temp
+
+variable tmp equal "lz"
+variable L0 equal ${tmp}
+print "Initial Length, L0: ${L0}"
+variable strain equal "v_srate/1e12"
+
+
+#------------Deform------------------------------
+reset_timestep 0
+
+fix             1 all nve 300.0 300.0 10.0 aniso 0.0 0.0 10
+fix             2 all deform 1 z erate -0.01 units box
+
+
+#mencetak hasil run program
+
+variable strain equal "(lz - v_L0)/v_L0"
+variable p1 equal "v_strain"
+variable p2 equal "-pxx/10000"
+variable p3 equal "-pyy/10000"
+variable p4 equal "-pzz/10000"
+variable p5 equal "lx"
+variable p6 equal "ly"
+variable p7 equal "lz"
+variable p8 equal "temp"
+variable p9 equal "pe"
+variable p10 equal "ke"
+variable p11 equal "-pxy/10000"
+variable p13 equal "-pyz/10000"
+variable p12 equal "-pxz/10000"
+variable fm equal "(v_p2+v_p3+v_p4)/3" ##### Hydrostatic stress
+
+variable fv equal "sqrt((v_p2-v_p3)^2+(v_p3-v_p4)^2+(v_p4-v_p2)^2+6*(v_p11^2+v_p12^2+v_p13^2)/2)" ######Von Mises Stress
+
+variable t equal "v_fm/v_fv"
+variable fd equal (((v_p2-v_fm)*(v_p3-v_fm)*(v_p4-v_fm))-v_p11^2*(v_p4-v_fm)-v_p12^2*(v_p3-v_fm)-v_p13^2*(v_p2-v_fm)+2*v_p11*v_p12*v_p13)####Deviatoric Von Mises stress
+
+fix def_print all print 100 "${p1} ${p2} ${p3} ${p4} ${p5} ${p6} ${p7} ${p8} ${p9} ${p10} ${p11} ${p12} ${p13} ${fm} ${fv} ${t} ${fd}" file mg001.defo.txt screen no
+
+thermo		10
+timestep	0.001
+
+shell cd ..
+shell mkdir bending1_sio2
+shell cd bending1_sio2
+
+dump            1 all custom 1000 SiO2.* id type x y z 
+dump_modify	1 element Si O
+dump            2 all xyz 10000 sio2.out
+#dump           2 all xyz 10000 silinderSiO.out
+run		10000
+
